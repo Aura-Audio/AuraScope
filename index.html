@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acoustic LF/Vibration Analyzer</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --text: #e0e0e0;
+            --accent: #00e676;
+            --lfn-color: #ff3d00;
+            --lf-color: #ffea00;
+            --vib-color: #d500f9;
+            --res-color: #00b0ff;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        header { text-align: center; margin-bottom: 20px; }
+        h1 { margin: 0 0 10px 0; color: var(--accent); }
+        .controls {
+            background-color: var(--panel);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+        }
+        select, button {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #444; }
+        button.active { background-color: var(--accent); color: black; font-weight: bold; }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background-color: var(--panel);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border-bottom: 4px solid var(--accent);
+        }
+        .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: #aaa; text-transform: uppercase; }
+        .metric-card .value { font-size: 28px; font-weight: bold; font-family: monospace;}
+        .metric-card .unit { font-size: 14px; color: #888; }
+
+        #card-lfn { border-color: var(--lfn-color); }
+        #card-lf { border-color: var(--lf-color); }
+        #card-vib { border-color: var(--vib-color); }
+        #card-res { border-color: var(--res-color); }
+
+        canvas {
+            background-color: var(--panel);
+            border-radius: 8px;
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .info {
+            max-width: 800px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #888;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Acoustic LF/Vibration Analyzer</h1>
+        <p>Live measurement of low frequency noise and structural resonance</p>
+    </header>
+
+    <div class="controls">
+        <button id="btn-toggle">Start Measurement</button>
+        <select id="mic-select">
+            <option value="">Default Microphone</option>
+        </select>
+    </div>
+
+    <div class="dashboard">
+        <div class="metric-card" id="card-vib">
+            <h3>Vibration Proxy (< 20Hz)</h3>
+            <div class="value" id="val-vib">--</div>
+            <div class="unit">dBFS</div>
+        </div>
+        <div class="metric-card" id="card-lfn">
+            <h3>LFN (20 - 100Hz)</h3>
+            <div class="value" id="val-lfn">--</div>
+            <div class="unit">dBFS</div>
+        </div>
+        <div class="metric-card" id="card-lf">
+            <h3>LF (100 - 250Hz)</h3>
+            <div class="value" id="val-lf">--</div>
+            <div class="unit">dBFS</div>
+        </div>
+        <div class="metric-card" id="card-res">
+            <h3>Peak Resonance</h3>
+            <div class="value" id="val-res">--</div>
+            <div class="unit">Hz</div>
+        </div>
+    </div>
+
+    <canvas id="spectrum" width="800" height="300"></canvas>
+
+    <div class="info">
+        <strong>Notes:</strong> Measurements are relative to Full Scale (dBFS). A standard smartphone or laptop microphone will artificially roll off sub-bass frequencies (< 50Hz). For accurate LFN and air/structure-borne vibration measurements, select a calibrated USB measurement microphone (e.g., miniDSP UMIK-1) from the dropdown once connected.
+    </div>
+
+    <script>
+        let audioCtx;
+        let analyser;
+        let stream;
+        let source;
+        let isRunning = false;
+        let animationId;
+
+        // UI Elements
+        const btnToggle = document.getElementById('btn-toggle');
+        const micSelect = document.getElementById('mic-select');
+        const canvas = document.getElementById('spectrum');
+        const canvasCtx = canvas.getContext('2d');
+
+        const valVib = document.getElementById('val-vib');
+        const valLfn = document.getElementById('val-lfn');
+        const valLf = document.getElementById('val-lf');
+        const valRes = document.getElementById('val-res');
+
+        // Toggle Audio Processing
+        btnToggle.addEventListener('click', async () => {
+            if (!isRunning) {
+                await startAudio();
+            } else {
+                stopAudio();
+            }
+        });
+
+        // Handle Mic change
+        micSelect.addEventListener('change', async () => {
+            if (isRunning) {
+                stopAudio();
+                await startAudio();
+            }
+        });
+
+        async function populateMics() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const mics = devices.filter(device => device.kind === 'audioinput');
+                
+                // Keep the current selection if possible
+                const currentVal = micSelect.value;
+                micSelect.innerHTML = '<option value="">Default Microphone</option>';
+                
+                mics.forEach(mic => {
+                    if (mic.deviceId) {
+                        const option = document.createElement('option');
+                        option.value = mic.deviceId;
+                        option.text = mic.label || `Microphone ${micSelect.length}`;
+                        micSelect.appendChild(option);
+                    }
+                });
+                if(currentVal) micSelect.value = currentVal;
+            } catch (err) {
+                console.error("Error enumerating devices:", err);
+            }
+        }
+
+        async function startAudio() {
+            try {
+                // Audio Constraints - Disabling all webRTC processing to get RAW acoustic data
+                const constraints = {
+                    audio: {
+                        deviceId: micSelect.value ? { exact: micSelect.value } : undefined,
+                        echoCancellation: false,
+                        autoGainControl: false,
+                        noiseSuppression: false,
+                        channelCount: 1
+                    }
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Populate mics again now that we definitely have permissions
+                await populateMics();
+
+                // Setup Web Audio API
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                
+                // Max FFT size for highest frequency resolution (especially important for low frequencies)
+                // 32768 samples @ 48kHz = ~1.46 Hz per bin resolution
+                analyser.fftSize = 32768; 
+                analyser.smoothingTimeConstant = 0.8; // Smooth out jitter
+
+                source = audioCtx.createMediaStreamSource(stream);
+                source.connect(analyser);
+
+                isRunning = true;
+                btnToggle.textContent = "Stop Measurement";
+                btnToggle.classList.add("active");
+
+                analyze();
+            } catch (err) {
+                alert("Microphone access denied or error occurred: " + err.message);
+            }
+        }
+
+        function stopAudio() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            if (audioCtx) {
+                audioCtx.close();
+            }
+            cancelAnimationFrame(animationId);
+            isRunning = false;
+            btnToggle.textContent = "Start Measurement";
+            btnToggle.classList.remove("active");
+            
+            // Reset UI
+            valVib.textContent = "--";
+            valLfn.textContent = "--";
+            valLf.textContent = "--";
+            valRes.textContent = "--";
+            canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Helper to average dB logarithmically 
+        function getBandEnergy(data, startIndex, endIndex) {
+            let sum = 0;
+            let count = 0;
+            for (let i = startIndex; i <= endIndex; i++) {
+                // Filter out absolute silence (-Infinity)
+                if (data[i] !== -Infinity && data[i] > -140) {
+                    // Convert dB to linear power, sum, then back to dB
+                    sum += Math.pow(10, data[i] / 10);
+                    count++;
+                }
+            }
+            if (count === 0 || sum === 0) return -120;
+            return 10 * Math.log10(sum / count);
+        }
+
+        function analyze() {
+            if (!isRunning) return;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Float32Array(bufferLength);
+            analyser.getFloatFrequencyData(dataArray);
+
+            const sampleRate = audioCtx.sampleRate;
+            const binWidth = sampleRate / analyser.fftSize; // ~1.46 Hz
+
+            // 1. Vibration Proxy (0 Hz - 20 Hz) Infrasound / Structure rumble
+            const vibStart = Math.floor(1 / binWidth);
+            const vibEnd = Math.floor(20 / binWidth);
+            const vibDb = getBandEnergy(dataArray, vibStart, vibEnd);
+
+            // 2. LFN (Low Frequency Noise) (20 Hz - 100 Hz)
+            const lfnStart = Math.floor(20 / binWidth);
+            const lfnEnd = Math.floor(100 / binWidth);
+            const lfnDb = getBandEnergy(dataArray, lfnStart, lfnEnd);
+
+            // 3. LF (Low Frequency) (100 Hz - 250 Hz)
+            const lfStart = Math.floor(100 / binWidth);
+            const lfEnd = Math.floor(250 / binWidth);
+            const lfDb = getBandEnergy(dataArray, lfStart, lfEnd);
+
+            // 4. Resonance (Highest Peak between 10Hz and 500Hz)
+            let maxDb = -Infinity;
+            let resFrequency = 0;
+            const resMaxBin = Math.floor(500 / binWidth);
+            
+            for (let i = Math.floor(10 / binWidth); i <= resMaxBin; i++) {
+                if (dataArray[i] > maxDb) {
+                    maxDb = dataArray[i];
+                    resFrequency = i * binWidth;
+                }
+            }
+
+            // Update UI
+            valVib.textContent = vibDb > -120 ? vibDb.toFixed(1) : "-120.0";
+            valLfn.textContent = lfnDb > -120 ? lfnDb.toFixed(1) : "-120.0";
+            valLf.textContent = lfDb > -120 ? lfDb.toFixed(1) : "-120.0";
+            valRes.textContent = maxDb > -100 ? resFrequency.toFixed(1) : "--";
+
+            drawSpectrum(dataArray, sampleRate, binWidth);
+
+            animationId = requestAnimationFrame(analyze);
+        }
+
+        function drawSpectrum(dataArray, sampleRate, binWidth) {
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            canvasCtx.fillStyle = '#1e1e1e';
+            canvasCtx.fillRect(0, 0, width, height);
+
+            // Audio bounds
+            const minFreq = 10;
+            const maxFreq = 20000;
+            const minDb = -120;
+            const maxDb = 0;
+
+            canvasCtx.beginPath();
+            canvasCtx.strokeStyle = '#00e676';
+            canvasCtx.lineWidth = 2;
+
+            for (let i = 1; i < dataArray.length; i++) {
+                const freq = i * binWidth;
+                if (freq < minFreq) continue;
+                if (freq > maxFreq) break;
+
+                // Logarithmic X axis
+                const x = width * (Math.log10(freq / minFreq) / Math.log10(maxFreq / minFreq));
+                
+                // Linear Y axis mapping for Decibels
+                let db = dataArray[i];
+                if (db < minDb) db = minDb;
+                if (db > maxDb) db = maxDb;
+                const y = height - ((db - minDb) / (maxDb - minDb) * height);
+
+                if (i === 1) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+            }
+            canvasCtx.stroke();
+
+            // Draw grid lines
+            drawGrid(minFreq, maxFreq, width, height);
+        }
+
+        function drawGrid(minFreq, maxFreq, width, height) {
+            canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            canvasCtx.font = '10px Arial';
+            canvasCtx.textAlign = 'center';
+
+            const markers = [20, 50, 100, 250, 1000, 5000, 10000];
+            
+            markers.forEach(freq => {
+                const x = width * (Math.log10(freq / minFreq) / Math.log10(maxFreq / minFreq));
+                
+                // Draw vertical line
+                canvasCtx.beginPath();
+                canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                canvasCtx.moveTo(x, 0);
+                canvasCtx.lineTo(x, height);
+                canvasCtx.stroke();
+
+                // Draw label
+                canvasCtx.fillText(freq + 'Hz', x, height - 5);
+            });
+        }
+        
+        // Setup default mics request on load (triggers browser perm prompt earlier if preferred, 
+        // but modern browsers require user gesture. We rely on the button click).
+    </script>
+</body>
+</html>
