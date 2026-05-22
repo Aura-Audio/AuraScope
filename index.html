@@ -3,18 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acoustic LF/Vibration Analyzer</title>
+    <title>AuraScope by AuraAudio - LF/Vibration Analyzer</title>
     <style>
+        /* CSS Variables - Light Mode (Default) */
         :root {
+            --bg: #f5f7fa;
+            --panel: #ffffff;
+            --text: #2d3748;
+            --text-muted: #718096;
+            --accent: #00c853;
+            --border: #e2e8f0;
+            --btn-bg: #edf2f7;
+            --btn-hover: #e2e8f0;
+            --btn-text: #2d3748;
+            --badge-bg: #e5e7eb;
+
+            /* Metric Colors */
+            --vib-color: #aa00ff;
+            --lfn-color: #dd2c00;
+            --lf-color: #d99900; 
+            --mf-color: #00a050;
+            --bb-color: #4a5568;
+            --res-color: #0091ea;
+            
+            /* Severity Colors */
+            --sev-low: #4caf50;
+            --sev-med: #ff9800;
+            --sev-high: #ff5722;
+            --sev-ext: #d50000;
+            
+            /* Canvas specific */
+            --canvas-bg: #f8fafc;
+            --grid-line: rgba(0, 0, 0, 0.08);
+            --grid-text: rgba(0, 0, 0, 0.5);
+        }
+
+        /* CSS Variables - Dark Mode */
+        [data-theme="dark"] {
             --bg: #121212;
             --panel: #1e1e1e;
             --text: #e0e0e0;
+            --text-muted: #888888;
             --accent: #00e676;
+            --border: #333333;
+            --btn-bg: #333333;
+            --btn-hover: #444444;
+            --btn-text: #ffffff;
+            --badge-bg: #333333;
+            
+            /* Metric Colors */
+            --vib-color: #d500f9;
             --lfn-color: #ff3d00;
             --lf-color: #ffea00;
-            --vib-color: #d500f9;
+            --mf-color: #00e676;
+            --bb-color: #ffffff;
             --res-color: #00b0ff;
+            
+            /* Canvas specific */
+            --canvas-bg: #1e1e1e;
+            --grid-line: rgba(255, 255, 255, 0.1);
+            --grid-text: rgba(255, 255, 255, 0.4);
         }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg);
@@ -24,9 +74,13 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            transition: background-color 0.3s, color 0.3s;
         }
+
         header { text-align: center; margin-bottom: 20px; }
         h1 { margin: 0 0 10px 0; color: var(--accent); }
+        header p { color: var(--text-muted); margin: 0; font-size: 14px;}
+        
         .controls {
             background-color: var(--panel);
             padding: 15px;
@@ -38,67 +92,160 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            max-width: 800px;
+            max-width: 1000px;
             box-sizing: border-box;
+            border: 1px solid var(--border);
+            transition: background-color 0.3s, border-color 0.3s;
         }
+
         select, button {
-            background-color: #333;
-            color: white;
-            border: 1px solid #555;
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+            border: 1px solid var(--border);
             padding: 10px 15px;
             border-radius: 5px;
-            font-size: 16px;
+            font-size: 14px;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        button:hover { background-color: #444; }
-        button.active { background-color: var(--accent); color: black; font-weight: bold; }
+
+        button:hover, select:hover { background-color: var(--btn-hover); }
+        button.active { background-color: var(--accent); color: white; font-weight: bold; border-color: var(--accent); }
+        
+        #btn-download { background-color: #1565c0; color: white; border-color: #0d47a1; }
+        #btn-download:hover { background-color: #1976d2; }
         
         .dashboard {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 15px;
             width: 100%;
-            max-width: 800px;
+            max-width: 1000px;
             margin-bottom: 20px;
         }
+
         .metric-card {
             background-color: var(--panel);
-            padding: 20px;
+            padding: 15px;
             border-radius: 8px;
             text-align: center;
-            border-bottom: 4px solid var(--accent);
+            border: 1px solid var(--border);
+            border-bottom-width: 4px;
+            transition: background-color 0.3s, border-color 0.3s;
+            position: relative;
         }
-        .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: #aaa; text-transform: uppercase; }
-        .metric-card .value { font-size: 28px; font-weight: bold; font-family: monospace;}
-        .metric-card .unit { font-size: 14px; color: #888; }
 
-        #card-lfn { border-color: var(--lfn-color); }
-        #card-lf { border-color: var(--lf-color); }
-        #card-vib { border-color: var(--vib-color); }
-        #card-res { border-color: var(--res-color); }
+        .metric-card h3 { margin: 0 0 5px 0; font-size: 13px; color: var(--text-muted); text-transform: uppercase; font-weight: bold;}
+        .metric-card .value { font-size: 28px; font-weight: bold; font-family: monospace; margin: 5px 0;}
+        .metric-card .unit { font-size: 12px; color: var(--text-muted); }
+
+        /* Severity Badges */
+        .severity-badge {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: white;
+            background-color: #555; 
+            letter-spacing: 0.5px;
+        }
+        .sev-low { background-color: var(--sev-low); }
+        .sev-med { background-color: var(--sev-med); color: black;}
+        .sev-high { background-color: var(--sev-high); }
+        .sev-ext { background-color: var(--sev-ext); animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; box-shadow: 0 0 8px var(--sev-ext); }
+            100% { opacity: 1; }
+        }
+
+        #card-vib { border-bottom-color: var(--vib-color); }
+        #card-lfn { border-bottom-color: var(--lfn-color); }
+        #card-lf { border-bottom-color: var(--lf-color); }
+        #card-mf { border-bottom-color: var(--mf-color); }
+        #card-bb { border-bottom-color: var(--bb-color); }
+        #card-res { border-bottom-color: var(--res-color); }
 
         canvas {
-            background-color: var(--panel);
+            background-color: var(--canvas-bg);
             border-radius: 8px;
             width: 100%;
-            max-width: 800px;
+            max-width: 1000px;
             height: 300px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            transition: background-color 0.3s, border-color 0.3s;
         }
-        .info {
-            max-width: 800px;
-            margin-top: 20px;
-            font-size: 13px;
-            color: #888;
-            line-height: 1.5;
+
+        .panel-container {
+            background-color: var(--panel);
+            width: 100%;
+            max-width: 1000px;
+            border-radius: 8px;
+            padding: 20px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            transition: background-color 0.3s, border-color 0.3s;
         }
+
+        .panel-container h2 { margin-top: 0; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;}
+        
+        .history-panel { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: center; }
+        th, td { padding: 12px; border-bottom: 1px solid var(--border); transition: border-color 0.3s;}
+        th { color: var(--accent); text-transform: uppercase; font-size: 12px; }
+        .row-vib { color: var(--vib-color); font-weight: 600;}
+        .row-lfn { color: var(--lfn-color); font-weight: 600;}
+        .row-lf { color: var(--lf-color); font-weight: 600;}
+        .row-mf { color: var(--mf-color); font-weight: 600;}
+        .row-bb { color: var(--bb-color); font-weight: 600;}
+        .row-res { color: var(--res-color); font-weight: 600;}
+
+        .def-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
+        .def-card { padding: 15px; background: rgba(128, 128, 128, 0.05); border-left: 4px solid var(--border); border-radius: 4px; }
+        .def-card h4 { margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px;}
+        .def-card p { margin: 0 0 8px 0; font-size: 13px; line-height: 1.5; color: var(--text); opacity: 0.9;}
+        .def-card p:last-child { margin-bottom: 0; }
+        
+        .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; }
+        .dot-vib { background-color: var(--vib-color); }
+        .dot-lfn { background-color: var(--lfn-color); }
+        .dot-lf { background-color: var(--lf-color); }
+        .dot-mf { background-color: var(--mf-color); }
+        .dot-bb { background-color: var(--bb-color); }
+        .dot-res { background-color: var(--res-color); }
+
+        .def-vib { border-left-color: var(--vib-color); }
+        .def-vib h4 { color: var(--vib-color); }
+        .def-lfn { border-left-color: var(--lfn-color); }
+        .def-lfn h4 { color: var(--lfn-color); }
+        .def-lf { border-left-color: var(--lf-color); }
+        .def-lf h4 { color: var(--lf-color); }
+        .def-mf { border-left-color: var(--mf-color); }
+        .def-mf h4 { color: var(--mf-color); }
+        .def-bb { border-left-color: var(--bb-color); }
+        .def-bb h4 { color: var(--bb-color); }
+        .def-res { border-left-color: var(--res-color); }
+        .def-res h4 { color: var(--res-color); }
+
+        .info { max-width: 1000px; font-size: 13px; color: var(--text-muted); line-height: 1.5; text-align: center; margin-bottom: 40px;}
+        .status-badge { display: inline-block; padding: 6px 12px; border-radius: 4px; background: var(--badge-bg); font-size: 13px; font-weight: 500; border: 1px solid var(--border);}
+        
+        .levels { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; font-size: 11px;}
+        .lvl { padding: 3px 8px; border-radius: 4px; color: white;}
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Acoustic LF/Vibration Analyzer</h1>
-        <p>Live measurement of low frequency noise and structural resonance</p>
+        <h1>AuraScope <span style="font-size: 16px; color:var(--text-muted); font-weight: normal;">by AuraAudio</span></h1>
+        <p>Live measurement and long-term logging of LF, LFN, and Structural Resonance</p>
     </header>
 
     <div class="controls">
@@ -106,82 +253,226 @@
         <select id="mic-select">
             <option value="">Default Microphone</option>
         </select>
+        <button id="btn-download">Download CSV</button>
+        <button id="btn-theme">🌙 Dark Mode</button>
+        <div class="status-badge" id="log-count">Data points: 0</div>
     </div>
 
     <div class="dashboard">
         <div class="metric-card" id="card-vib">
-            <h3>Vibration Proxy (< 20Hz)</h3>
+            <h3>Vib Proxy (< 20Hz)</h3>
             <div class="value" id="val-vib">--</div>
             <div class="unit">dBFS</div>
+            <div class="severity-badge" id="sev-vib">STANDBY</div>
         </div>
         <div class="metric-card" id="card-lfn">
-            <h3>LFN (20 - 100Hz)</h3>
+            <h3>LFN (20-100Hz)</h3>
             <div class="value" id="val-lfn">--</div>
             <div class="unit">dBFS</div>
+            <div class="severity-badge" id="sev-lfn">STANDBY</div>
         </div>
         <div class="metric-card" id="card-lf">
-            <h3>LF (100 - 250Hz)</h3>
+            <h3>LF (100-250Hz)</h3>
             <div class="value" id="val-lf">--</div>
             <div class="unit">dBFS</div>
+            <div class="severity-badge" id="sev-lf">STANDBY</div>
+        </div>
+        <div class="metric-card" id="card-mf">
+            <h3>Mid (250-2kHz)</h3>
+            <div class="value" id="val-mf">--</div>
+            <div class="unit">dBFS</div>
+            <div class="severity-badge" id="sev-mf">STANDBY</div>
+        </div>
+        <div class="metric-card" id="card-bb">
+            <h3>Broadband Overall</h3>
+            <div class="value" id="val-bb">--</div>
+            <div class="unit">dBFS</div>
+            <div class="severity-badge" id="sev-bb">STANDBY</div>
         </div>
         <div class="metric-card" id="card-res">
             <h3>Peak Resonance</h3>
             <div class="value" id="val-res">--</div>
             <div class="unit">Hz</div>
+            <div class="severity-badge" id="sev-res">STANDBY</div>
         </div>
     </div>
 
-    <canvas id="spectrum" width="800" height="300"></canvas>
+    <canvas id="spectrum" width="1000" height="300"></canvas>
+
+    <div class="panel-container history-panel">
+        <h2>Historical Lookback (Running Averages)</h2>
+        <table id="history-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Past 1 Min</th>
+                    <th>Past 1 Hour</th>
+                    <th>Past 8 Hours</th>
+                    <th>Past 24 Hours</th>
+                    <th>Past 1 Week</th>
+                    <th>Past 1 Month</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="row-vib">
+                    <td>Vib (<20Hz) Avg</td>
+                    <td id="tbl-vib-1m">--</td><td id="tbl-vib-1h">--</td><td id="tbl-vib-8h">--</td>
+                    <td id="tbl-vib-24h">--</td><td id="tbl-vib-1w">--</td><td id="tbl-vib-1mo">--</td>
+                </tr>
+                <tr class="row-lfn">
+                    <td>LFN (20-100Hz) Avg</td>
+                    <td id="tbl-lfn-1m">--</td><td id="tbl-lfn-1h">--</td><td id="tbl-lfn-8h">--</td>
+                    <td id="tbl-lfn-24h">--</td><td id="tbl-lfn-1w">--</td><td id="tbl-lfn-1mo">--</td>
+                </tr>
+                <tr class="row-lf">
+                    <td>LF (100-250Hz) Avg</td>
+                    <td id="tbl-lf-1m">--</td><td id="tbl-lf-1h">--</td><td id="tbl-lf-8h">--</td>
+                    <td id="tbl-lf-24h">--</td><td id="tbl-lf-1w">--</td><td id="tbl-lf-1mo">--</td>
+                </tr>
+                <tr class="row-mf">
+                    <td>Mid (250-2kHz) Avg</td>
+                    <td id="tbl-mf-1m">--</td><td id="tbl-mf-1h">--</td><td id="tbl-mf-8h">--</td>
+                    <td id="tbl-mf-24h">--</td><td id="tbl-mf-1w">--</td><td id="tbl-mf-1mo">--</td>
+                </tr>
+                <tr class="row-bb">
+                    <td>Broadband Avg</td>
+                    <td id="tbl-bb-1m">--</td><td id="tbl-bb-1h">--</td><td id="tbl-bb-8h">--</td>
+                    <td id="tbl-bb-24h">--</td><td id="tbl-bb-1w">--</td><td id="tbl-bb-1mo">--</td>
+                </tr>
+                <tr class="row-res">
+                    <td>Peak Resonance Max</td>
+                    <td id="tbl-res-1m">--</td><td id="tbl-res-1h">--</td><td id="tbl-res-8h">--</td>
+                    <td id="tbl-res-24h">--</td><td id="tbl-res-1w">--</td><td id="tbl-res-1mo">--</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="panel-container">
+        <h2>Metrics & Severity Glossary</h2>
+        
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+            <strong>Understanding Severity:</strong> 0 dBFS is digital maximum (clipping). -120 dBFS is digital silence. Because measurement mic hardware gains vary, these severity badges assume a standard consumer microphone curve. A reading of "Extreme" indicates signal levels approaching the hardware limits. 
+            <br>
+            <span class="levels">
+                <span class="lvl sev-low">Low (&lt; -75 dBFS)</span>
+                <span class="lvl sev-med" style="color:black">Normal (-75 to -55 dBFS)</span>
+                <span class="lvl sev-high">High (-55 to -35 dBFS)</span>
+                <span class="lvl sev-ext">Extreme (&gt; -35 dBFS)</span>
+            </span>
+        </p>
+
+        <div class="def-grid">
+            <div class="def-card def-vib">
+                <h4><span class="dot dot-vib"></span> Vibration Proxy (&lt; 20 Hz)</h4>
+                <p>Also known as <strong>Infrasound</strong>. Felt physically rather than heard. Proxy for structure-borne energy from traffic, industrial machinery, or heavy HVAC compressors.</p>
+            </div>
+            <div class="def-card def-lfn">
+                <h4><span class="dot dot-lfn"></span> LFN (20 - 100 Hz)</h4>
+                <p>Deep bass frequencies that easily pass through solid walls and windows. Associated with the annoying "rumble" of diesel engines, idling trucks, or subwoofer bass.</p>
+            </div>
+            <div class="def-card def-lf">
+                <h4><span class="dot dot-lf"></span> LF (100 - 250 Hz)</h4>
+                <p>Upper bass to lower mid-range spectrum. Contains the "boominess" of a poorly treated acoustic room, and fundamental frequencies of male speech and standard appliances.</p>
+            </div>
+            <div class="def-card def-mf">
+                <h4><span class="dot dot-mf"></span> Mid-Frequency (250 - 2kHz)</h4>
+                <p>The "Speech Band" or general background noise. <strong>Crucial for context:</strong> If LFN is High, but MF is also High, the environment is just generally loud. If LFN is High but MF is Low, the LFN is "unmasked" and highly perceptible/annoying.</p>
+            </div>
+            <div class="def-card def-bb">
+                <h4><span class="dot dot-bb"></span> Broadband (10 - 20kHz)</h4>
+                <p>The total overall acoustic energy detected across the entire audible spectrum. Useful as a general baseline room-noise volume.</p>
+            </div>
+            <div class="def-card def-res">
+                <h4><span class="dot dot-res"></span> Peak Resonance</h4>
+                <p>The specific, single frequency experiencing the absolute highest acoustic energy in real-time. Tracking a steady peak (e.g., a locked 60Hz line) helps pinpoint specific electrical hums or motor RPMs.</p>
+            </div>
+        </div>
+    </div>
 
     <div class="info">
-        <strong>Notes:</strong> Measurements are relative to Full Scale (dBFS). A standard smartphone or laptop microphone will artificially roll off sub-bass frequencies (< 50Hz). For accurate LFN and air/structure-borne vibration measurements, select a calibrated USB measurement microphone (e.g., miniDSP UMIK-1) from the dropdown once connected.
+        <strong>Hardware Notes:</strong> Standard device microphones artificially roll off sub-bass frequencies. For accurate LFN and air/structure-borne vibration measurements, select a calibrated USB measurement microphone (e.g., miniDSP UMIK-1) from the dropdown once connected. 
+        <br><em>Warning: Running the application continuously for multiple weeks will accumulate raw memory. Export your CSV periodically.</em>
     </div>
 
     <script>
-        let audioCtx;
-        let analyser;
-        let stream;
-        let source;
+        let audioCtx, analyser, stream, source;
         let isRunning = false;
         let animationId;
+        
+        let rawLogData = []; 
+        let aggregate1s = []; 
+        let currentSecondData = []; 
+        let aggIntervalId;
 
-        // UI Elements
         const btnToggle = document.getElementById('btn-toggle');
         const micSelect = document.getElementById('mic-select');
+        const btnDownload = document.getElementById('btn-download');
+        const btnTheme = document.getElementById('btn-theme');
+        const countBadge = document.getElementById('log-count');
         const canvas = document.getElementById('spectrum');
         const canvasCtx = canvas.getContext('2d');
 
         const valVib = document.getElementById('val-vib');
         const valLfn = document.getElementById('val-lfn');
         const valLf = document.getElementById('val-lf');
+        const valMf = document.getElementById('val-mf');
+        const valBb = document.getElementById('val-bb');
         const valRes = document.getElementById('val-res');
 
-        // Toggle Audio Processing
-        btnToggle.addEventListener('click', async () => {
-            if (!isRunning) {
-                await startAudio();
+        const sevVib = document.getElementById('sev-vib');
+        const sevLfn = document.getElementById('sev-lfn');
+        const sevLf = document.getElementById('sev-lf');
+        const sevMf = document.getElementById('sev-mf');
+        const sevBb = document.getElementById('sev-bb');
+        const sevRes = document.getElementById('sev-res');
+
+        const periods = {
+            '1m': 60 * 1000,
+            '1h': 60 * 60 * 1000,
+            '8h': 8 * 60 * 60 * 1000,
+            '24h': 24 * 60 * 60 * 1000,
+            '1w': 7 * 24 * 60 * 60 * 1000,
+            '1mo': 30 * 24 * 60 * 60 * 1000
+        };
+
+        // Theme Toggle Logic
+        btnTheme.addEventListener('click', () => {
+            const body = document.body;
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            
+            if (isDark) {
+                body.removeAttribute('data-theme'); // default is light
+                btnTheme.textContent = '🌙 Dark Mode';
             } else {
-                stopAudio();
+                body.setAttribute('data-theme', 'dark');
+                btnTheme.textContent = '☀️ Light Mode';
             }
+            if (!isRunning) drawEmptyGrid();
         });
 
-        // Handle Mic change
+        btnToggle.addEventListener('click', async () => {
+            if (!isRunning) await startAudio();
+            else stopAudio();
+        });
+
         micSelect.addEventListener('change', async () => {
-            if (isRunning) {
-                stopAudio();
-                await startAudio();
-            }
+            if (isRunning) { stopAudio(); await startAudio(); }
+        });
+
+        btnDownload.addEventListener('click', downloadCSV);
+
+        window.addEventListener('load', () => {
+            populateMics();
+            drawEmptyGrid();
         });
 
         async function populateMics() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const mics = devices.filter(device => device.kind === 'audioinput');
-                
-                // Keep the current selection if possible
                 const currentVal = micSelect.value;
                 micSelect.innerHTML = '<option value="">Default Microphone</option>';
-                
                 mics.forEach(mic => {
                     if (mic.deviceId) {
                         const option = document.createElement('option');
@@ -191,14 +482,11 @@
                     }
                 });
                 if(currentVal) micSelect.value = currentVal;
-            } catch (err) {
-                console.error("Error enumerating devices:", err);
-            }
+            } catch (err) { console.error("Error enumerating devices:", err); }
         }
 
         async function startAudio() {
             try {
-                // Audio Constraints - Disabling all webRTC processing to get RAW acoustic data
                 const constraints = {
                     audio: {
                         deviceId: micSelect.value ? { exact: micSelect.value } : undefined,
@@ -210,18 +498,12 @@
                 };
 
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                // Populate mics again now that we definitely have permissions
                 await populateMics();
 
-                // Setup Web Audio API
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioCtx.createAnalyser();
-                
-                // Max FFT size for highest frequency resolution (especially important for low frequencies)
-                // 32768 samples @ 48kHz = ~1.46 Hz per bin resolution
                 analyser.fftSize = 32768; 
-                analyser.smoothingTimeConstant = 0.8; // Smooth out jitter
+                analyser.smoothingTimeConstant = 0.8; 
 
                 source = audioCtx.createMediaStreamSource(stream);
                 source.connect(analyser);
@@ -230,6 +512,7 @@
                 btnToggle.textContent = "Stop Measurement";
                 btnToggle.classList.add("active");
 
+                aggIntervalId = setInterval(processAggregates, 1000);
                 analyze();
             } catch (err) {
                 alert("Microphone access denied or error occurred: " + err.message);
@@ -237,39 +520,56 @@
         }
 
         function stopAudio() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            if (audioCtx) {
-                audioCtx.close();
-            }
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            if (audioCtx) audioCtx.close();
             cancelAnimationFrame(animationId);
+            clearInterval(aggIntervalId);
+            
             isRunning = false;
             btnToggle.textContent = "Start Measurement";
             btnToggle.classList.remove("active");
             
-            // Reset UI
-            valVib.textContent = "--";
-            valLfn.textContent = "--";
-            valLf.textContent = "--";
-            valRes.textContent = "--";
-            canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+            const resetVal = "--";
+            valVib.textContent = resetVal; valLfn.textContent = resetVal; 
+            valLf.textContent = resetVal; valMf.textContent = resetVal; 
+            valBb.textContent = resetVal; valRes.textContent = resetVal;
+            
+            const badges = [sevVib, sevLfn, sevLf, sevMf, sevBb, sevRes];
+            badges.forEach(b => {
+                b.textContent = "STANDBY";
+                b.className = "severity-badge";
+            });
+
+            drawEmptyGrid();
         }
 
-        // Helper to average dB logarithmically 
         function getBandEnergy(data, startIndex, endIndex) {
-            let sum = 0;
-            let count = 0;
+            let sum = 0, count = 0;
             for (let i = startIndex; i <= endIndex; i++) {
-                // Filter out absolute silence (-Infinity)
                 if (data[i] !== -Infinity && data[i] > -140) {
-                    // Convert dB to linear power, sum, then back to dB
                     sum += Math.pow(10, data[i] / 10);
                     count++;
                 }
             }
             if (count === 0 || sum === 0) return -120;
             return 10 * Math.log10(sum / count);
+        }
+
+        function updateSeverityBadge(element, dbValue) {
+            element.className = "severity-badge"; 
+            if (dbValue < -75) {
+                element.textContent = "LOW";
+                element.classList.add("sev-low");
+            } else if (dbValue < -55) {
+                element.textContent = "NORMAL";
+                element.classList.add("sev-med");
+            } else if (dbValue < -35) {
+                element.textContent = "HIGH";
+                element.classList.add("sev-high");
+            } else {
+                element.textContent = "EXTREME";
+                element.classList.add("sev-ext");
+            }
         }
 
         function analyze() {
@@ -280,113 +580,214 @@
             analyser.getFloatFrequencyData(dataArray);
 
             const sampleRate = audioCtx.sampleRate;
-            const binWidth = sampleRate / analyser.fftSize; // ~1.46 Hz
+            const binWidth = sampleRate / analyser.fftSize; 
 
-            // 1. Vibration Proxy (0 Hz - 20 Hz) Infrasound / Structure rumble
-            const vibStart = Math.floor(1 / binWidth);
-            const vibEnd = Math.floor(20 / binWidth);
-            const vibDb = getBandEnergy(dataArray, vibStart, vibEnd);
+            const vibDb = getBandEnergy(dataArray, Math.floor(1/binWidth), Math.floor(20/binWidth));
+            const lfnDb = getBandEnergy(dataArray, Math.floor(20/binWidth), Math.floor(100/binWidth));
+            const lfDb = getBandEnergy(dataArray, Math.floor(100/binWidth), Math.floor(250/binWidth));
+            const mfDb = getBandEnergy(dataArray, Math.floor(250/binWidth), Math.floor(2000/binWidth));
+            const bbDb = getBandEnergy(dataArray, Math.floor(10/binWidth), Math.floor(20000/binWidth)); 
 
-            // 2. LFN (Low Frequency Noise) (20 Hz - 100 Hz)
-            const lfnStart = Math.floor(20 / binWidth);
-            const lfnEnd = Math.floor(100 / binWidth);
-            const lfnDb = getBandEnergy(dataArray, lfnStart, lfnEnd);
-
-            // 3. LF (Low Frequency) (100 Hz - 250 Hz)
-            const lfStart = Math.floor(100 / binWidth);
-            const lfEnd = Math.floor(250 / binWidth);
-            const lfDb = getBandEnergy(dataArray, lfStart, lfEnd);
-
-            // 4. Resonance (Highest Peak between 10Hz and 500Hz)
-            let maxDb = -Infinity;
-            let resFrequency = 0;
-            const resMaxBin = Math.floor(500 / binWidth);
-            
+            let maxDb = -Infinity, resFrequency = 0;
+            const resMaxBin = Math.floor(500 / binWidth); 
             for (let i = Math.floor(10 / binWidth); i <= resMaxBin; i++) {
-                if (dataArray[i] > maxDb) {
-                    maxDb = dataArray[i];
-                    resFrequency = i * binWidth;
-                }
+                if (dataArray[i] > maxDb) { maxDb = dataArray[i]; resFrequency = i * binWidth; }
             }
 
-            // Update UI
             valVib.textContent = vibDb > -120 ? vibDb.toFixed(1) : "-120.0";
             valLfn.textContent = lfnDb > -120 ? lfnDb.toFixed(1) : "-120.0";
             valLf.textContent = lfDb > -120 ? lfDb.toFixed(1) : "-120.0";
+            valMf.textContent = mfDb > -120 ? mfDb.toFixed(1) : "-120.0";
+            valBb.textContent = bbDb > -120 ? bbDb.toFixed(1) : "-120.0";
             valRes.textContent = maxDb > -100 ? resFrequency.toFixed(1) : "--";
 
-            drawSpectrum(dataArray, sampleRate, binWidth);
+            updateSeverityBadge(sevVib, vibDb);
+            updateSeverityBadge(sevLfn, lfnDb);
+            updateSeverityBadge(sevLf, lfDb);
+            updateSeverityBadge(sevMf, mfDb);
+            updateSeverityBadge(sevBb, bbDb);
+            
+            if (maxDb > -120) {
+                updateSeverityBadge(sevRes, maxDb);
+            } else {
+                sevRes.className = "severity-badge";
+                sevRes.textContent = "STANDBY";
+            }
 
+            const now = Date.now();
+            const record = [now, vibDb, lfnDb, lfDb, mfDb, bbDb, resFrequency];
+            rawLogData.push(record);
+            currentSecondData.push(record);
+            
+            if (rawLogData.length % 30 === 0) {
+                countBadge.textContent = `Data points: ${rawLogData.length.toLocaleString()}`;
+            }
+
+            drawSpectrum(dataArray, sampleRate, binWidth);
             animationId = requestAnimationFrame(analyze);
+        }
+
+        function processAggregates() {
+            if (currentSecondData.length === 0) return;
+            let sumVib = 0, sumLfn = 0, sumLf = 0, sumMf = 0, sumBb = 0, maxRes = 0;
+            
+            for (let r of currentSecondData) {
+                sumVib += r[1]; sumLfn += r[2]; sumLf += r[3]; sumMf += r[4]; sumBb += r[5];
+                if (r[6] > maxRes) maxRes = r[6];
+            }
+            let len = currentSecondData.length;
+            aggregate1s.push({
+                t: Date.now(), 
+                vib: sumVib / len, 
+                lfn: sumLfn / len, 
+                lf: sumLf / len, 
+                mf: sumMf / len,
+                bb: sumBb / len,
+                res: maxRes
+            });
+            currentSecondData = [];
+            updateTable();
+        }
+
+        function updateTable() {
+            const now = Date.now();
+            let results = {};
+            for (let p in periods) results[p] = { vib: 0, lfn: 0, lf: 0, mf: 0, bb: 0, res: 0, count: 0 };
+
+            for (let i = aggregate1s.length - 1; i >= 0; i--) {
+                let item = aggregate1s[i];
+                let age = now - item.t;
+                let withinAnyPeriod = false;
+
+                for (let p in periods) {
+                    if (age <= periods[p]) {
+                        results[p].vib += item.vib; 
+                        results[p].lfn += item.lfn; 
+                        results[p].lf += item.lf;
+                        results[p].mf += item.mf;
+                        results[p].bb += item.bb;
+                        if (item.res > results[p].res) results[p].res = item.res;
+                        results[p].count++; 
+                        withinAnyPeriod = true;
+                    }
+                }
+                if (!withinAnyPeriod) break; 
+            }
+
+            for (let p in periods) {
+                let r = results[p];
+                if (r.count > 0) {
+                    document.getElementById(`tbl-vib-${p}`).textContent = (r.vib / r.count).toFixed(1);
+                    document.getElementById(`tbl-lfn-${p}`).textContent = (r.lfn / r.count).toFixed(1);
+                    document.getElementById(`tbl-lf-${p}`).textContent = (r.lf / r.count).toFixed(1);
+                    document.getElementById(`tbl-mf-${p}`).textContent = (r.mf / r.count).toFixed(1);
+                    document.getElementById(`tbl-bb-${p}`).textContent = (r.bb / r.count).toFixed(1);
+                    document.getElementById(`tbl-res-${p}`).textContent = r.res.toFixed(1);
+                }
+            }
+        }
+
+        function downloadCSV() {
+            if (rawLogData.length === 0) {
+                alert("No data available to download. Start a measurement first.");
+                return;
+            }
+            btnDownload.textContent = "Processing...";
+            btnDownload.disabled = true;
+
+            setTimeout(() => {
+                let csvContent = "Timestamp_ms,Date_Time,Vib_dB_Proxy,LFN_dB,LF_dB,MidFreq_dB,Broadband_dB,Peak_Resonance_Hz\n";
+                const blobParts = [csvContent];
+                let chunk = "";
+                
+                for (let i = 0; i < rawLogData.length; i++) {
+                    let r = rawLogData[i];
+                    let dateStr = new Date(r[0]).toISOString();
+                    chunk += `${r[0]},${dateStr},${r[1].toFixed(2)},${r[2].toFixed(2)},${r[3].toFixed(2)},${r[4].toFixed(2)},${r[5].toFixed(2)},${r[6].toFixed(1)}\n`;
+                    if (i % 15000 === 0) { blobParts.push(chunk); chunk = ""; }
+                }
+                if (chunk.length > 0) blobParts.push(chunk);
+
+                const blob = new Blob(blobParts, { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `AuraScope_Log_${new Date().toISOString()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                btnDownload.textContent = "Download CSV";
+                btnDownload.disabled = false;
+            }, 50);
+        }
+
+        function getCanvasColors() {
+            const style = getComputedStyle(document.body);
+            return {
+                bg: style.getPropertyValue('--canvas-bg').trim(),
+                gridLine: style.getPropertyValue('--grid-line').trim(),
+                gridText: style.getPropertyValue('--grid-text').trim(),
+                accent: style.getPropertyValue('--accent').trim()
+            };
+        }
+
+        function drawEmptyGrid() {
+            const colors = getCanvasColors();
+            canvasCtx.fillStyle = colors.bg;
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+            drawGrid(10, 20000, canvas.width, canvas.height, colors);
         }
 
         function drawSpectrum(dataArray, sampleRate, binWidth) {
             const width = canvas.width;
             const height = canvas.height;
+            const colors = getCanvasColors();
             
-            canvasCtx.fillStyle = '#1e1e1e';
+            canvasCtx.fillStyle = colors.bg;
             canvasCtx.fillRect(0, 0, width, height);
 
-            // Audio bounds
-            const minFreq = 10;
-            const maxFreq = 20000;
-            const minDb = -120;
-            const maxDb = 0;
+            const minFreq = 10, maxFreq = 20000;
+            const minDb = -120, maxDb = 0;
 
-            canvasCtx.beginPath();
-            canvasCtx.strokeStyle = '#00e676';
-            canvasCtx.lineWidth = 2;
+            if (dataArray.length > 0) {
+                canvasCtx.beginPath();
+                canvasCtx.strokeStyle = colors.accent;
+                canvasCtx.lineWidth = 2;
 
-            for (let i = 1; i < dataArray.length; i++) {
-                const freq = i * binWidth;
-                if (freq < minFreq) continue;
-                if (freq > maxFreq) break;
+                for (let i = 1; i < dataArray.length; i++) {
+                    const freq = i * binWidth;
+                    if (freq < minFreq) continue;
+                    if (freq > maxFreq) break;
 
-                // Logarithmic X axis
-                const x = width * (Math.log10(freq / minFreq) / Math.log10(maxFreq / minFreq));
-                
-                // Linear Y axis mapping for Decibels
-                let db = dataArray[i];
-                if (db < minDb) db = minDb;
-                if (db > maxDb) db = maxDb;
-                const y = height - ((db - minDb) / (maxDb - minDb) * height);
+                    const x = width * (Math.log10(freq / minFreq) / Math.log10(maxFreq / minFreq));
+                    let db = dataArray[i];
+                    if (db < minDb) db = minDb; if (db > maxDb) db = maxDb;
+                    const y = height - ((db - minDb) / (maxDb - minDb) * height);
 
-                if (i === 1) {
-                    canvasCtx.moveTo(x, y);
-                } else {
-                    canvasCtx.lineTo(x, y);
+                    if (i === 1) canvasCtx.moveTo(x, y);
+                    else canvasCtx.lineTo(x, y);
                 }
+                canvasCtx.stroke();
             }
-            canvasCtx.stroke();
-
-            // Draw grid lines
-            drawGrid(minFreq, maxFreq, width, height);
+            
+            drawGrid(minFreq, maxFreq, width, height, colors);
         }
 
-        function drawGrid(minFreq, maxFreq, width, height) {
-            canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            canvasCtx.font = '10px Arial';
+        function drawGrid(minFreq, maxFreq, width, height, colors) {
+            canvasCtx.fillStyle = colors.gridText;
+            canvasCtx.font = '11px Arial';
             canvasCtx.textAlign = 'center';
-
             const markers = [20, 50, 100, 250, 1000, 5000, 10000];
             
             markers.forEach(freq => {
                 const x = width * (Math.log10(freq / minFreq) / Math.log10(maxFreq / minFreq));
-                
-                // Draw vertical line
                 canvasCtx.beginPath();
-                canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                canvasCtx.moveTo(x, 0);
-                canvasCtx.lineTo(x, height);
-                canvasCtx.stroke();
-
-                // Draw label
+                canvasCtx.strokeStyle = colors.gridLine;
+                canvasCtx.moveTo(x, 0); canvasCtx.lineTo(x, height); canvasCtx.stroke();
                 canvasCtx.fillText(freq + 'Hz', x, height - 5);
             });
         }
-        
-        // Setup default mics request on load (triggers browser perm prompt earlier if preferred, 
-        // but modern browsers require user gesture. We rely on the button click).
     </script>
 </body>
 </html>
